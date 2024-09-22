@@ -12,6 +12,7 @@ Base: DeclarativeMeta = declarative_base()
 
 import app.models.user
 import app.models.role
+import app.models.account
 
 # create engine
 

@@ -22,6 +22,8 @@ class User(Base):
     creator = relationship('User', remote_side=[id], foreign_keys=[creator_id])
     updater = relationship('User', remote_side=[id], foreign_keys=[updated_by])
 
+    accounts = relationship("Account", back_populates="owner")
+
     @validates('email')
     def validate_email(self, key, email):
         assert len(email) > 10

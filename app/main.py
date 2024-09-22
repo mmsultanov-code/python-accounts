@@ -20,5 +20,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 from app.controller.auth import router as auth_router
+from app.controller.account import router as account_router
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
+app.include_router(account_router, prefix="/account", tags=["account"])
