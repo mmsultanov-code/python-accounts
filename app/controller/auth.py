@@ -12,6 +12,7 @@ router = APIRouter(
     prefix="/auth",
 )
 
+auth_service = AuthService()
 
 @router.post('/register', response_model=GetUserAfterRegistrationSchema)
 async def register(payload: CreateUserSchema, session: AsyncSession = Depends(get_async_session)):
@@ -19,8 +20,8 @@ async def register(payload: CreateUserSchema, session: AsyncSession = Depends(ge
     Register a new user.
 
     Parameters:
-    - payload: CreateUserSchema - The payload containing user registration data.
-    - session: AsyncSession (optional) - The database session to use for the operation.
+    - payload: `CreateUserSchema` - The payload containing user registration data.
+    - session: `AsyncSession` (optional) - The database session to use for the operation.
 
     Returns:
     - User - The newly registered user.
@@ -32,7 +33,6 @@ async def register(payload: CreateUserSchema, session: AsyncSession = Depends(ge
     async with session.begin():
         try:
             ValidationRegisterException(payload)
-            auth_service = AuthService()
             user = await auth_service.register_user(session, payload)
             return user
         except Exception as e:
@@ -59,7 +59,6 @@ async def login(payload: UserLoginSchema, response: Response, session: AsyncSess
     async with session.begin():
         try:
             ValidationLoginException(payload)
-            auth_service = AuthService()
             auth = await auth_service.login(session, payload, response, Authorize)
             return auth
         except Exception as e:
