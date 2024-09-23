@@ -79,3 +79,17 @@ JWT_ALGORITHM=JWT_ALGORITHM # Алгоритм шифрования JWT
 - Защищенные маршруты с использованием JWT-аутентификации.
 - Асинхронная работа с базой данных PostgreSQL.
 - Кеширование данных с помощью Redis.
+
+
+## Swagger
+
+После установки и запуска проекта будет доступен [Swagger по адресу](http://localhost:8000/docs/)
+
+для авторизации сразу же будут доступны два вида пользователя:
+
+- User
+    - email: `test_user@example.com`
+    - password: `test`
+- Admin
+    - email: `test@example.com`
+    - password: `test`
