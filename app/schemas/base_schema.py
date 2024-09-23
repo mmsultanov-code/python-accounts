@@ -34,7 +34,7 @@ class UserInListSchema(BaseModel):
     avatar: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         exclude = {'id', 'password', 'role_id'}
 
 class ELementorDataList(BaseModel):
@@ -43,4 +43,4 @@ class ELementorDataList(BaseModel):
     slug: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
