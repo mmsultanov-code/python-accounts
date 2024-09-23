@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.database import get_async_session
 from app.schemas.account import AccountBalanceRequest, AccountCreate, IncomingFundCreate
-from app.services.account import create_account, get_account_balance, process_settlement, get_user_by_id, add_incoming_fund
+from app.services.account import AccountService
 from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter(
@@ -27,7 +27,7 @@ async def account_balance(request: AccountBalanceRequest, session: AsyncSession 
     """
     try:
         async with session.begin():
-            balance = await get_account_balance(request.account_id, session, request.datetime)
+            balance = await AccountService.get_account_balance(session, request.account_id, request.datetime)
         return {"account_id": request.account_id, "balance": balance}
     except SQLAlchemyError as e:
         await session.rollback()
@@ -35,7 +35,7 @@ async def account_balance(request: AccountBalanceRequest, session: AsyncSession 
         raise HTTPException(status_code=500, detail="Transaction error")
     except Exception as e:
         print(f"Неизвестная ошибка: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Маршрут для добавления входящих средств
@@ -51,8 +51,11 @@ async def create_incoming_fund(fund_data: IncomingFundCreate, session: AsyncSess
     Returns:
     - The created incoming fund.
     """
-    fund = await add_incoming_fund(fund_data, session)
-    return fund
+    try:
+        fund = await AccountService.add_incoming_fund(session, fund_data)
+        return fund
+    except HTTPException as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Маршрут для обработки урегулирования средств
@@ -73,7 +76,7 @@ async def settlement(fund_id: int, session: AsyncSession = Depends(get_async_ses
     """
     try:
         async with session.begin():
-            await process_settlement(fund_id, session)
+            await AccountService.process_settlement(session, fund_id)
         return {"message": "Settlement processed"}
     except SQLAlchemyError as e:
         await session.rollback()
@@ -98,11 +101,11 @@ async def create_new_account(account_data: AccountCreate, session: AsyncSession 
     """
     try:
         # Проверяем, существует ли пользователь
-        user = await get_user_by_id(account_data.user_id, session)
+        user = await AccountService.get_user_by_id(session, account_data.user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        account = await create_account(user_id=account_data.user_id, session=session)
+        account = await AccountService.create_account(session, account_data.user_id)
         return account
 
     except SQLAlchemyError as e:
