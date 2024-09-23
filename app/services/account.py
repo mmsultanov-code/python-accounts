@@ -91,8 +91,8 @@ class AccountService:
             if not account:
                 raise HTTPException(status_code=404, detail="Account not found")
 
+            print(account.balance)
             current_balance = account.balance
-            print(current_balance)
 
             # Если datetime не указан, возвращаем текущий баланс
             if not target_datetime:
@@ -103,12 +103,11 @@ class AccountService:
 
             # Получение всех средств, которые будут урегулированы до указанного времени
             stmt = select(IncomingFunds)\
-                .filter(IncomingFunds.account_id == account_id)\
-                .filter(IncomingFunds.settlement_date <= target_datetime)
+                .filter(IncomingFunds.account_id == account_id)
             result = await session.execute(stmt)
             incoming_funds = result.scalars().all()
 
-            future_balance = current_balance
+            future_balance = 0
             for fund in incoming_funds:
                 future_balance += fund.amount
 

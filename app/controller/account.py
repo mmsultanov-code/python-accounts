@@ -9,6 +9,40 @@ router = APIRouter(
     prefix="/auth",
 )
 
+# Маршрут для создания нового аккаунта
+@router.post("/accounts/", response_model=AccountCreate)
+async def create_new_account(account_data: AccountCreate, session: AsyncSession = Depends(get_async_session)):
+    """
+    Create a new account for a user.
+    Args:
+        account_data (AccountCreate): The account data for the new account.
+        session (AsyncSession, optional): The async session to use for the database transaction. Defaults to Depends(get_async_session).
+    Returns:
+        Account: The newly created account.
+    Raises:
+        HTTPException: If the user is not found or if there is an error during the transaction.
+    """
+    try:
+        # Проверяем, существует ли пользователь
+        user = await AccountService.get_user_by_id(session, account_data.user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        account = await AccountService.create_account(session, account_data.user_id)
+        return account
+
+    except SQLAlchemyError as e:
+        await session.rollback()
+        print(f"Ошибка транзакции: {e}")
+        raise HTTPException(status_code=500, detail="Transaction error")
+
+    except Exception as e:
+        print(f"Неизвестная ошибка: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    finally:
+        await session.close()
+
 # Маршрут для получения баланса счета
 @router.post("/account/balance")
 async def account_balance(request: AccountBalanceRequest, session: AsyncSession = Depends(get_async_session)):
@@ -57,7 +91,6 @@ async def create_incoming_fund(fund_data: IncomingFundCreate, session: AsyncSess
     except HTTPException as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 # Маршрут для обработки урегулирования средств
 @router.post("/settlement/{fund_id}")
 async def settlement(fund_id: int, session: AsyncSession = Depends(get_async_session)):
@@ -85,37 +118,3 @@ async def settlement(fund_id: int, session: AsyncSession = Depends(get_async_ses
     except Exception as e:
         print(f"Неизвестная ошибка: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.post("/accounts/", response_model=AccountCreate)
-async def create_new_account(account_data: AccountCreate, session: AsyncSession = Depends(get_async_session)):
-    """
-    Create a new account for a user.
-    Args:
-        account_data (AccountCreate): The account data for the new account.
-        session (AsyncSession, optional): The async session to use for the database transaction. Defaults to Depends(get_async_session).
-    Returns:
-        Account: The newly created account.
-    Raises:
-        HTTPException: If the user is not found or if there is an error during the transaction.
-    """
-    try:
-        # Проверяем, существует ли пользователь
-        user = await AccountService.get_user_by_id(session, account_data.user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        account = await AccountService.create_account(session, account_data.user_id)
-        return account
-
-    except SQLAlchemyError as e:
-        await session.rollback()
-        print(f"Ошибка транзакции: {e}")
-        raise HTTPException(status_code=500, detail="Transaction error")
-
-    except Exception as e:
-        print(f"Неизвестная ошибка: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-    finally:
-        await session.close()

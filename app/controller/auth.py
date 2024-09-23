@@ -28,14 +28,12 @@ async def register(payload: CreateUserSchema, session: AsyncSession = Depends(ge
     - HTTPException - If an error occurs during the registration process.
 
     """
-    async with session.begin():
-        try:
-            ValidationRegisterException(payload)
-            user = await AuthService.register_user(session, payload)
-            return user
-        except Exception as e:
-            log.error(e)
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    errors = ValidationRegisterException.validate_payload(payload)
+    if errors:
+        raise ValidationRegisterException(errors)
+    
+    user = await AuthService.register_user(session, payload)
+    return user
         
 @router.post('/login', response_model=ResponseLoginUser)
 async def login(payload: UserLoginSchema, response: Response, session: AsyncSession = Depends(get_async_session), Authorize: AuthJWT = Depends()):
@@ -54,11 +52,9 @@ async def login(payload: UserLoginSchema, response: Response, session: AsyncSess
     Raises:
     - HTTPException: If there is an internal server error during the login process.
     """
-    async with session.begin():
-        try:
-            ValidationLoginException(payload)
-            auth = await AuthService.login(session, payload, response, Authorize)
-            return auth
-        except Exception as e:
-            log.error(e)
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    errors = ValidationLoginException.validate_payload(payload)
+    if errors:
+        raise ValidationLoginException(errors)
+
+    auth = await AuthService.login(session, payload, response, Authorize)
+    return auth

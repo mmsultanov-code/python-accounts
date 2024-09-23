@@ -29,14 +29,21 @@ class AuthService:
         Raises:
             Exception: If an error occurs while retrieving the user.
         """
-        try:
-            user_stmt = select(UserModel).where(UserModel.email == email.lower())
-            user = await session.execute(user_stmt)
-            user = user.scalars().first()
-            return user
-        except Exception as e:
-            log.error(e)
-            raise Exception(e)
+        async with session.begin_nested():
+            try:
+                user_stmt = select(UserModel).where(UserModel.email == email.lower())
+                user = await session.execute(user_stmt)
+                user = user.scalars().first()
+
+                return user
+
+            except HTTPException as e:
+                log.error(f"HTTP Exception occurred: {e.detail}")
+                raise
+
+            except Exception as e:
+                log.error(f"An unexpected error occurred: {str(e)}")
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
     async def __get_role_by_slug(session: AsyncSession, slug: str) -> RoleModel:
         """
@@ -50,18 +57,19 @@ class AuthService:
             HTTPException: If the role is not found in the database.
             Exception: If an error occurs while retrieving the role.
         """
-        try:
-            role = await session.execute(select(RoleModel).where(RoleModel.slug == slug))
-            role = role.scalars().first()
+        async with session.begin_nested():
+            try:
+                role = await session.execute(select(RoleModel).where(RoleModel.slug == slug))
+                role = role.scalars().first()
 
-            if not role:
-                log.error('Role not found')
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Role not found')
+                if not role:
+                    log.error('Role not found')
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Role not found')
 
-            return role
-        except Exception as e:
-            log.error(e)
-            raise Exception(e)
+                return role
+            except Exception as e:
+                log.error(e)
+                raise Exception(e)
     
     async def __hash_password(password: str) -> str:
         """
@@ -102,41 +110,42 @@ class AuthService:
         Raises:
             HTTPException: If the email already exists or if there is an internal server error.
         """
-        # Get user role
-        role = await AuthService.__get_role_by_slug(session, "user_role")
+        async with session.begin():
+            # Get user role
+            role = await AuthService.__get_role_by_slug(session, "user_role")
 
-        # Check if email already exists
-        user = await AuthService.__get_user_by_email(session, payload.email.lower())
-        if user:
-            log.error('Email already exists')
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Email already exists')
+            # Check if email already exists
+            user = await AuthService.__get_user_by_email(session, payload.email.lower())
+            if user:
+                log.error('Email already exists')
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Email already exists')
 
-        # hashing password
-        payload.password = await AuthService.__hash_password(payload.password)
-        del payload.passwordConfirm
-        payload.role_id = role.id
-        payload.email = payload.email.lower()
+            # hashing password
+            payload.password = await AuthService.__hash_password(payload.password)
+            del payload.passwordConfirm
+            payload.role_id = role.id
+            payload.email = payload.email.lower()
 
-        # remove creator_id if it is 0
-        if payload.creator_id == 0:
-            payload.creator_id = None
-        
-        # Create new user
-        new_user = UserModel(**payload.dict())
-        session.add(new_user)
-        
-        # Commit transaction
-        try:
-            await session.commit()
-            return {
-                "status_code": status.HTTP_201_CREATED,
-                "message": "User created successfully",
-                "data": new_user
-            }
-        except Exception as e:
-            log.error(e)
-            await session.rollback()
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            # remove creator_id if it is 0
+            if payload.creator_id == 0:
+                payload.creator_id = None
+            
+            # Create new user
+            new_user = UserModel(**payload.dict())
+            session.add(new_user)
+            
+            # Commit transaction
+            try:
+                await session.commit()
+                return {
+                    "status_code": status.HTTP_201_CREATED,
+                    "message": "User created successfully",
+                    "data": new_user
+                }
+            except Exception as e:
+                log.error(e)
+                await session.rollback()
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
     @staticmethod
     async def login(session: AsyncSession, payload, response: Response, Authorize: AuthJWT = Depends()):
@@ -154,6 +163,11 @@ class AuthService:
         """
         try:
             user = await AuthService.__get_user_by_email(session, payload.email.lower())
+
+            if not user:
+                log.error('User not found')
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
             verify_password = await AuthService.__verify_password(payload.password, user.password)
             if not verify_password:
                 log.error('Invalid password')

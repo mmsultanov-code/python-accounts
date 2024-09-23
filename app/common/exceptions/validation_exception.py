@@ -2,13 +2,11 @@ from fastapi import HTTPException, status
 import logging as log
 
 class ValidationRegisterException(HTTPException):
-    def __init__(self, payload):
-        errors = self.validate_payload(payload)
-        if errors:
-            log.error(errors)
-            super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=errors)
+    def __init__(self, errors):
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=errors)
 
-    def validate_payload(self, payload):
+    @classmethod
+    def validate_payload(cls, payload):
         errors = []
 
         if not payload.name:
@@ -33,15 +31,16 @@ class ValidationRegisterException(HTTPException):
             log.error('Password is not valid (string)')
             errors.append({'password': 'Password is not valid (string)'})
 
-        return errors
+        if errors:
+            return errors
+        else:
+            return None
 
 class ValidationLoginException(HTTPException):
-    def __init__(self, payload):
-        errors = self.validate_payload(payload)
-        if errors:
-            log.error(errors)
-            super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=errors)
+    def __init__(self, errors):
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=errors)
 
+    @classmethod
     def validate_payload(self, payload):
         errors = []
 
@@ -55,4 +54,7 @@ class ValidationLoginException(HTTPException):
             log.error('Password is not valid (string)')
             errors.append({'password': 'Password is not valid (string)'})
 
-        return errors
+        if errors:
+            return errors
+        else:
+            return None
