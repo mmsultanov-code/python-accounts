@@ -16,6 +16,19 @@ REFRESH_TOKEN_EXPIRES_IN  = Config.REFRESH_TOKEN_EXPIRES_IN
 class AuthService:
 
     async def __get_user_by_email(session: AsyncSession, email: str) -> UserModel:
+        """
+        Retrieves a user from the database based on their email address.
+
+        Args:
+            session (AsyncSession): The database session.
+            email (str): The email address of the user.
+
+        Returns:
+            UserModel: The user object retrieved from the database.
+
+        Raises:
+            Exception: If an error occurs while retrieving the user.
+        """
         try:
             user_stmt = select(UserModel).where(UserModel.email == email.lower())
             user = await session.execute(user_stmt)
@@ -26,6 +39,17 @@ class AuthService:
             raise Exception(e)
 
     async def __get_role_by_slug(session: AsyncSession, slug: str) -> RoleModel:
+        """
+        Retrieves a role from the database based on its slug.
+        Args:
+            session (AsyncSession): The database session.
+            slug (str): The slug of the role.
+        Returns:
+            RoleModel: The role object.
+        Raises:
+            HTTPException: If the role is not found in the database.
+            Exception: If an error occurs while retrieving the role.
+        """
         try:
             role = await session.execute(select(RoleModel).where(RoleModel.slug == slug))
             role = role.scalars().first()
@@ -40,15 +64,44 @@ class AuthService:
             raise Exception(e)
     
     async def __hash_password(password: str) -> str:
+        """
+        Hashes the given password using bcrypt algorithm.
+
+        Parameters:
+            password (str): The password to be hashed.
+
+        Returns:
+            str: The hashed password.
+        """
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         return pwd_context.hash(password)
     
     async def __verify_password(password: str, hashed_password: str) -> bool:
+        """
+        Verify if the given password matches the hashed password.
+
+        Parameters:
+        - password (str): The password to be verified.
+        - hashed_password (str): The hashed password to compare against.
+
+        Returns:
+        - bool: True if the password matches the hashed password, False otherwise.
+        """
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         return pwd_context.verify(password, hashed_password)
 
     @staticmethod
     async def register_user(session: AsyncSession, payload):
+        """
+        Register a new user.
+        Args:
+            session (AsyncSession): The database session.
+            payload: The user data payload.
+        Returns:
+            dict: A dictionary containing the status code, message, and data of the newly created user.
+        Raises:
+            HTTPException: If the email already exists or if there is an internal server error.
+        """
         # Get user role
         role = await AuthService.__get_role_by_slug(session, "user_role")
 
@@ -87,6 +140,18 @@ class AuthService:
         
     @staticmethod
     async def login(session: AsyncSession, payload, response: Response, Authorize: AuthJWT = Depends()):
+        """
+        Login function for authenticating a user.
+        Parameters:
+        - session (AsyncSession): The database session.
+        - payload: The login payload containing email and password.
+        - response (Response): The HTTP response object.
+        - Authorize (AuthJWT): The authorization object.
+        Returns:
+        - dict: A dictionary containing the status code, message, and user data.
+        Raises:
+        - HTTPException: If there is an error during the login process.
+        """
         try:
             user = await AuthService.__get_user_by_email(session, payload.email.lower())
             verify_password = await AuthService.__verify_password(payload.password, user.password)

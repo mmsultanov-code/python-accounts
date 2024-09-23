@@ -15,6 +15,20 @@ router = APIRouter(
 
 @router.post('/register', response_model=GetUserAfterRegistrationSchema)
 async def register(payload: CreateUserSchema, session: AsyncSession = Depends(get_async_session)):
+    """
+    Register a new user.
+
+    Parameters:
+    - payload: CreateUserSchema - The payload containing user registration data.
+    - session: AsyncSession (optional) - The database session to use for the operation.
+
+    Returns:
+    - User - The newly registered user.
+
+    Raises:
+    - HTTPException - If an error occurs during the registration process.
+
+    """
     async with session.begin():
         try:
             ValidationRegisterException(payload)
@@ -27,6 +41,21 @@ async def register(payload: CreateUserSchema, session: AsyncSession = Depends(ge
         
 @router.post('/login', response_model=ResponseLoginUser)
 async def login(payload: UserLoginSchema, response: Response, session: AsyncSession = Depends(get_async_session), Authorize: AuthJWT = Depends()):
+    """
+    Login function for authenticating a user.
+
+    Parameters:
+    - payload (UserLoginSchema): The user login payload containing the username and password.
+    - response (Response): The response object to send back to the client.
+    - session (AsyncSession, optional): The async session to use for database operations. Defaults to the session obtained from `get_async_session` dependency.
+    - Authorize (AuthJWT, optional): The AuthJWT instance for handling JWT authentication. Defaults to the instance obtained from `Depends()`.
+
+    Returns:
+    - auth: The authentication result.
+
+    Raises:
+    - HTTPException: If there is an internal server error during the login process.
+    """
     async with session.begin():
         try:
             ValidationLoginException(payload)

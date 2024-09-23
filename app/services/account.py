@@ -10,6 +10,19 @@ from app.models.user import User
 
 
 async def create_account(user_id: int, session: AsyncSession):
+    """
+    Create a new account with the given user ID and session.
+
+    Args:
+        user_id (int): The ID of the user associated with the account.
+        session (AsyncSession): The async session object for database operations.
+
+    Returns:
+        Account: The newly created account object.
+
+    Raises:
+        HTTPException: If there is an error while creating the account.
+    """
     try:
         # Создаем новый аккаунт с балансом по умолчанию
         new_account = Account(user_id=user_id, balance=0)
@@ -23,6 +36,19 @@ async def create_account(user_id: int, session: AsyncSession):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 async def get_account(account_id: int, session: AsyncSession):
+    """
+    Get an account by its account ID.
+
+    Parameters:
+    - account_id (int): The ID of the account to retrieve.
+    - session (AsyncSession): The database session to use for the query.
+
+    Returns:
+    - Account: The account object corresponding to the given account ID.
+
+    Raises:
+    - HTTPException: If the account with the given ID is not found.
+    """
     result = await session.execute(select(Account).filter_by(account_id=account_id))
     account = result.scalars().first()
     if not account:
@@ -30,12 +56,31 @@ async def get_account(account_id: int, session: AsyncSession):
     return account
 
 def make_naive(dt: datetime) -> datetime:
-    """Удаляет информацию о временной зоне, если она присутствует"""
+    """
+    Converts a datetime object to a naive datetime object by removing the timezone information.
+
+    Args:
+        dt (datetime): The datetime object to be converted.
+
+    Returns:
+        datetime: A naive datetime object without timezone information.
+    """
     if dt.tzinfo is not None:
         return dt.replace(tzinfo=None)
     return dt
 
 async def get_account_balance(account_id: int, session: AsyncSession, target_datetime: Optional[datetime] = None):
+    """
+    Retrieves the account balance for the specified account ID.
+    Args:
+        account_id (int): The ID of the account.
+        session (AsyncSession): The async session object for database operations.
+        target_datetime (Optional[datetime], optional): The target datetime to calculate the future balance. Defaults to None.
+    Returns:
+        float: The account balance.
+    Raises:
+        HTTPException: If the account is not found or if there is an internal server error.
+    """
     try:
         # Получение текущего баланса
         result = await session.execute(select(Account).filter_by(account_id=account_id))
@@ -73,6 +118,16 @@ async def get_account_balance(account_id: int, session: AsyncSession, target_dat
         raise HTTPException(status_code=500, detail="Internal server error")
 
 async def process_settlement(fund_id: int, session: AsyncSession):
+    """
+    Process settlement for a given fund ID.
+    Parameters:
+    - fund_id (int): The ID of the fund to process settlement for.
+    - session (AsyncSession): The asynchronous session object for database operations.
+    Raises:
+    - HTTPException: If the fund with the given ID is not found.
+    Returns:
+    - None
+    """
     # Получение входящих средств по ID
     result = await session.execute(select(IncomingFunds).filter_by(fund_id=fund_id))
     fund = result.scalars().first()
@@ -93,6 +148,19 @@ async def process_settlement(fund_id: int, session: AsyncSession):
     await session.commit()
 
 async def add_incoming_fund(fund_data: IncomingFundCreate, session: AsyncSession):
+    """
+    Adds a new record of incoming funds to the database.
+
+    Args:
+        fund_data (IncomingFundCreate): The data for the incoming funds.
+        session (AsyncSession): The database session.
+
+    Returns:
+        IncomingFunds: The newly created incoming funds record.
+
+    Raises:
+        HTTPException: If there is an error adding the incoming funds.
+    """
     try:
         # Создаем новую запись о входящих средствах
         target_datetime = make_naive(fund_data.settlement_date)
@@ -107,6 +175,19 @@ async def add_incoming_fund(fund_data: IncomingFundCreate, session: AsyncSession
         raise HTTPException(status_code=500, detail="Internal server error")
 
 async def get_user_by_id(user_id: int, session: AsyncSession):
+    """
+    Retrieves a user by their ID.
+
+    Args:
+        user_id (int): The ID of the user.
+        session (AsyncSession): The database session.
+
+    Returns:
+        User: The user object.
+
+    Raises:
+        HTTPException: If the user is not found.
+    """
     try:
         result = await session.execute(select(User).filter_by(id=user_id))
         user = result.scalars().first()
