@@ -4,10 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import update, delete
 from app.models.account import Account, IncomingFunds
 from datetime import datetime
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from typing import Optional
 from app.schemas.account import IncomingFundCreate
 from app.models.user import User
+import logging as log
 
 class AccountService:
 
@@ -71,7 +72,7 @@ class AccountService:
             return dt.replace(tzinfo=None)
         return dt
 
-    async def get_account_balance(session: AsyncSession, account_id: int, target_datetime: Optional[datetime] = None):
+    async def get_account_balance(session: AsyncSession, account_id: int):
         """
         Retrieves the account balance for the specified account ID.
         Args:
@@ -83,41 +84,44 @@ class AccountService:
         Raises:
             HTTPException: If the account is not found or if there is an internal server error.
         """
-        try:
-            # Получение текущего баланса
-            result = await session.execute(select(Account).where(Account.account_id == account_id))
-            account = result.scalars().first()
+        async with session.begin():
+            try:
+                # Получение всех средств, которые будут урегулированы до указанного времени
+                stmt = select(IncomingFunds)\
+                    .filter(IncomingFunds.account_id == account_id)
+                result = await session.execute(stmt)
+                incoming_funds = result.scalars().all()
 
-            if not account:
-                raise HTTPException(status_code=404, detail="Account not found")
+                future_balance = 0
+                for fund in incoming_funds:
+                    future_balance += fund.amount
 
-            print(account.balance)
-            current_balance = account.balance
+                return future_balance
+            except HTTPException as e:
+                raise e
+            except Exception as e:
+                # Логирование ошибки
+                print(f"Ошибка при получении баланса аккаунта: {e}")
+                raise HTTPException(status_code=500, detail="Internal server error")
 
-            # Если datetime не указан, возвращаем текущий баланс
-            if not target_datetime:
-                return current_balance
+    async def __get_fund_by_id(session: AsyncSession, fund_id: int):
+        async with session.begin_nested():
+            try:
+                result = await session.execute(select(IncomingFunds).filter_by(fund_id=fund_id))
+                fund = result.scalars().first()
+                
+                if not fund:
+                    raise HTTPException(status_code=404, detail="Fund not found")
 
-            # Приводим target_datetime к наивному datetime
-            target_datetime = AccountService.make_naive(target_datetime)
+                return fund
+        
+            except HTTPException as e:
+                log.error(f"HTTP Exception occurred: {e.detail}")
+                raise
 
-            # Получение всех средств, которые будут урегулированы до указанного времени
-            stmt = select(IncomingFunds)\
-                .filter(IncomingFunds.account_id == account_id)
-            result = await session.execute(stmt)
-            incoming_funds = result.scalars().all()
-
-            future_balance = 0
-            for fund in incoming_funds:
-                future_balance += fund.amount
-
-            return future_balance
-        except HTTPException as e:
-            raise e
-        except Exception as e:
-            # Логирование ошибки
-            print(f"Ошибка при получении баланса аккаунта: {e}")
-            raise HTTPException(status_code=500, detail="Internal server error")
+            except Exception as e:
+                log.error(f"An unexpected error occurred: {str(e)}")
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
     async def process_settlement(session: AsyncSession, fund_id: int):
         """
@@ -130,24 +134,17 @@ class AccountService:
         Returns:
         - None
         """
-        # Получение входящих средств по ID
-        result = await session.execute(select(IncomingFunds).filter_by(fund_id=fund_id))
-        fund = result.scalars().first()
+        async with session.begin():
+            fund = await AccountService.__get_fund_by_id(session, fund_id)
 
-        if not fund:
-            raise HTTPException(status_code=404, detail="Fund not found")
-
-        # Транзакция: добавляем средства к счету и удаляем запись о входящих средствах
-        async with session.begin_nested():
-            await session.execute(
-                update(Account)
-                .where(Account.account_id == fund.account_id)
-                .values(balance=Account.balance + fund.amount)
-            )
-            await session.execute(
-                delete(IncomingFunds).where(IncomingFunds.fund_id == fund_id)
-            )
-        await session.commit()
+            # Транзакция: добавляем средства к счету и удаляем запись о входящих средствах
+            async with session.begin_nested():
+                await session.execute(
+                    update(Account)
+                    .where(Account.account_id == fund.account_id)
+                    .values(balance=Account.balance + fund.amount)
+                )
+            await session.commit()
 
     def calculate_new_balance(amount, funds):
         new_balance = 0

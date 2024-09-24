@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.database import get_async_session
-from app.schemas.account import AccountBalanceRequest, AccountCreate, IncomingFundCreate
+from app.schemas.account import AccountBalanceRequest, AccountCreate, IncomingFundCreate, AccountCreateResponse, AccountBalanceResponse, IncomingFundCreateResponse, SettlementResponse
 from app.services.account import AccountService
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -10,7 +10,7 @@ router = APIRouter(
 )
 
 # Маршрут для создания нового аккаунта
-@router.post("/accounts/", response_model=AccountCreate)
+@router.post("/accounts/", response_model=AccountCreateResponse)
 async def create_new_account(account_data: AccountCreate, session: AsyncSession = Depends(get_async_session)):
     """
     Create a new account for a user.
@@ -44,7 +44,7 @@ async def create_new_account(account_data: AccountCreate, session: AsyncSession 
         await session.close()
 
 # Маршрут для получения баланса счета
-@router.post("/account/balance")
+@router.post("/account/balance", response_model=AccountBalanceResponse)
 async def account_balance(request: AccountBalanceRequest, session: AsyncSession = Depends(get_async_session)):
     """
     Retrieve the account balance for a given account ID.
@@ -59,21 +59,11 @@ async def account_balance(request: AccountBalanceRequest, session: AsyncSession 
     Raises:
     - HTTPException: If there is a transaction error or internal server error.
     """
-    try:
-        async with session.begin():
-            balance = await AccountService.get_account_balance(session, request.account_id, request.datetime)
-        return {"account_id": request.account_id, "balance": balance}
-    except SQLAlchemyError as e:
-        await session.rollback()
-        print(f"Ошибка транзакции: {e}")
-        raise HTTPException(status_code=500, detail="Transaction error")
-    except Exception as e:
-        print(f"Неизвестная ошибка: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
+    balance = await AccountService.get_account_balance(session, request.account_id)
+    return {"account_id": request.account_id, "balance": balance}
 
 # Маршрут для добавления входящих средств
-@router.post("/incoming-fund/")
+@router.post("/incoming-fund/", response_model=IncomingFundCreateResponse)
 async def create_incoming_fund(fund_data: IncomingFundCreate, session: AsyncSession = Depends(get_async_session)):
     """
     Create an incoming fund.
@@ -92,7 +82,7 @@ async def create_incoming_fund(fund_data: IncomingFundCreate, session: AsyncSess
         raise HTTPException(status_code=500, detail=str(e))
 
 # Маршрут для обработки урегулирования средств
-@router.post("/settlement/{fund_id}")
+@router.post("/settlement/{fund_id}", response_model=SettlementResponse)
 async def settlement(fund_id: int, session: AsyncSession = Depends(get_async_session)):
     """
     Process settlement for a given fund ID.
@@ -107,14 +97,5 @@ async def settlement(fund_id: int, session: AsyncSession = Depends(get_async_ses
     Raises:
     - HTTPException: If there is a transaction error or an internal server error occurs.
     """
-    try:
-        async with session.begin():
-            await AccountService.process_settlement(session, fund_id)
-        return {"message": "Settlement processed"}
-    except SQLAlchemyError as e:
-        await session.rollback()
-        print(f"Ошибка транзакции: {e}")
-        raise HTTPException(status_code=500, detail="Transaction error")
-    except Exception as e:
-        print(f"Неизвестная ошибка: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+    await AccountService.process_settlement(session, fund_id)
+    return {"message": "Settlement processed"}
